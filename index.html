@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>考古遺址初步篩選器</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
+        #webcam-container { margin-top: 20px; border: 5px solid #555; display: inline-block; }
+        #label-container { font-size: 24px; margin-top: 20px; font-weight: bold; }
+        .match { color: #ffeb3b; font-size: 32px; } /* 偵測到時變黃色加強顯示 */
+    </style>
+</head>
+<body>
+    <h2>大坌坑文化繩紋辨識</h2>
+    <button type="button" onclick="init()">啟動鏡頭</button>
+    <div id="webcam-container"></div>
+    <div id="label-container">等待啟動...</div>
+
+    <script type="text/javascript">
+        // 這裡替換成你在 Teachable Machine 產生的連結
+        const URL = "你的模型連結/"; 
+
+        let model, webcam, labelContainer, maxPredictions;
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // 設定鏡頭（支援手機後鏡頭）
+            const flip = false; 
+            webcam = new tmImage.Webcam(300, 300, flip); 
+            await webcam.setup({ facingMode: "environment" }); 
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            
+            // 找出機率最高的類別
+            let bestMatch = "";
+            let highestProb = 0;
+            for (let i = 0; i < maxPredictions; i++) {
+                if (prediction[i].probability > highestProb) {
+                    highestProb = prediction[i].probability;
+                    bestMatch = prediction[i].className;
+                }
+            }
+
+            // 如果機率超過 80% 就顯示結果
+            if (highestProb > 0.8) {
+                labelContainer.innerHTML = `<div class="match">偵測到：${bestMatch}</div>`;
+            } else {
+                labelContainer.innerHTML = "比對中...";
+            }
+        }
+    </script>
+</body>
+</html>
