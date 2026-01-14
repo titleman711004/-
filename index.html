@@ -2,51 +2,48 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台灣考古陶片辨識系統</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>台灣考古辨識系統</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-               text-align: center; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
-        h1 { font-size: 1.5rem; color: #ffcc00; }
-        #webcam-container { margin-top: 15px; border-radius: 15px; overflow: hidden; 
-                           border: 4px solid #444; display: inline-block; line-height: 0; }
-        #result-card { background: #333; border-radius: 15px; padding: 20px; 
-                      margin: 20px auto; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        #label-container { font-size: 1.4rem; font-weight: bold; color: #fff; margin-bottom: 10px; }
-        #detail-container { font-size: 1rem; color: #bbb; line-height: 1.5; }
-        button { background: #ffcc00; color: #000; border: none; padding: 12px 25px; 
-                 font-size: 1.1rem; font-weight: bold; border-radius: 50px; cursor: pointer; }
-        button:active { background: #e6b800; }
-        .loading { color: #888; font-style: italic; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; padding: 20px; touch-action: manipulation; }
+        h1 { font-size: 1.2rem; color: #ffcc00; }
+        #webcam-container { margin: 15px auto; width: 300px; height: 300px; border-radius: 15px; overflow: hidden; border: 3px solid #555; background: #000; }
+        #webcam-container canvas { width: 100% !important; height: auto !important; }
+        #result-card { background: #333; border-radius: 12px; padding: 15px; margin: 10px auto; max-width: 320px; }
+        #label-container { font-size: 1.5rem; font-weight: bold; color: #ffeb3b; }
+        #detail-container { font-size: 0.9rem; color: #bbb; margin-top: 8px; }
+        .start-btn { background: #ffcc00; color: #000; border: none; padding: 15px 30px; font-size: 1.1rem; font-weight: bold; border-radius: 30px; margin-top: 20px; cursor: pointer; width: 80%; }
+        .error-msg { color: #ff5252; font-size: 0.8rem; margin-top: 10px; text-align: left; background: #421; padding: 10px; border-radius: 5px; display: none; }
     </style>
 </head>
 <body>
 
-    <h1>台灣考古文化 AI 辨識</h1>
-    <p>請對準陶片紋飾，建議使用側光照射</p>
+    <h1>考古文化辨識測試版</h1>
     
-    <button type="button" id="start-btn" onclick="init()">開啟辨識鏡頭</button>
-
     <div id="webcam-container"></div>
 
     <div id="result-card">
-        <div id="label-container">等待啟動...</div>
-        <div id="detail-container">請點擊上方按鈕並允許相機權限</div>
+        <div id="label-container">準備就緒</div>
+        <div id="detail-container">請點擊下方按鈕啟動鏡頭</div>
     </div>
 
+    <button type="button" class="start-btn" id="start-btn" onclick="init()">點此開啟鏡頭</button>
+    
+    <div id="error-log" class="error-msg"></div>
+
     <script type="text/javascript">
-        // ！！！請將此處換成你在 Teachable Machine 訓練後生成的連結 ！！！
+        // 使用我提供的測試模型連結
         const URL = "https://teachablemachine.withgoogle.com/models/p_C0hO9Gf/"; 
 
         let model, webcam, labelContainer, detailContainer, maxPredictions;
 
         async function init() {
-            document.getElementById("start-btn").style.display = "none";
-            labelContainer = document.getElementById("label-container");
-            detailContainer = document.getElementById("detail-container");
-            labelContainer.innerHTML = "<span class='loading'>載入 AI 模型中...</span>";
+            const btn = document.getElementById("start-btn");
+            const errorLog = document.getElementById("error-log");
+            btn.innerHTML = "載入中...";
+            btn.disabled = true;
 
             try {
                 const modelURL = URL + "model.json";
@@ -55,18 +52,25 @@
                 model = await tmImage.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
 
-                // 手機端關鍵設定：facingMode: "environment" (後鏡頭)
+                // 手機相機設定
                 const flip = false; 
-                webcam = new tmImage.Webcam(350, 350, flip); 
+                webcam = new tmImage.Webcam(300, 300, flip); 
+                
+                // 這裡最容易噴錯，我們捕捉它
                 await webcam.setup({ facingMode: "environment" }); 
                 await webcam.play();
                 
                 window.requestAnimationFrame(loop);
                 document.getElementById("webcam-container").appendChild(webcam.canvas);
+                
+                btn.style.display = "none";
+                document.getElementById("label-container").innerHTML = "掃描中...";
             } catch (e) {
                 console.error(e);
-                labelContainer.innerHTML = "啟動失敗";
-                detailContainer.innerHTML = "請確保使用 HTTPS 連線並在 Safari/Chrome 允許相機權限。";
+                btn.innerHTML = "重試";
+                btn.disabled = false;
+                errorLog.style.display = "block";
+                errorLog.innerHTML = "<b>錯誤診斷：</b><br>名稱: " + e.name + "<br>訊息: " + e.message + "<br><br>請確認是否使用 Safari/Chrome 並允許相機權限。";
             }
         }
 
@@ -78,35 +82,14 @@
 
         async function predict() {
             const prediction = await model.predict(webcam.canvas);
-            
-            // 排序取得機率最高者
             prediction.sort((a, b) => b.probability - a.probability);
+            
             const top = prediction[0];
-
-            if (top.probability > 0.65) {
-                const name = top.className;
-                labelContainer.innerHTML = `發現：${name}`;
-                
-                // 根據類別自動顯示描述邏輯
-                let info = "";
-                if(name.includes("大坌坑")) {
-                    info = "💡 關鍵特徵：粗繩紋、質地粗糙。可能是台灣最早的新石器文化。";
-                } else if(name.includes("十三行")) {
-                    info = "💡 關鍵特徵：幾何拍印紋（方格紋）、紅褐陶。屬於金屬器時代。";
-                } else if(name.includes("圓山")) {
-                    info = "💡 關鍵特徵：素面無紋、堅硬、帶有把手。常見於北部貝塚。";
-                } else if(name.includes("卑南")) {
-                    info = "💡 關鍵特徵：橙紅夾砂陶、雙把罐。東部新石器時代代表。";
-                } else {
-                    info = `辨識信心度：${(top.probability * 100).toFixed(1)}%`;
-                }
-                detailContainer.innerHTML = info;
-            } else {
-                labelContainer.innerHTML = "掃描中...";
-                detailContainer.innerHTML = "請移動鏡頭或調整光線，對準陶片特徵。";
+            if (top.probability > 0.6) {
+                document.getElementById("label-container").innerHTML = top.className;
+                document.getElementById("detail-container").innerHTML = "辨識信心度: " + (top.probability * 100).toFixed(0) + "%";
             }
         }
     </script>
 </body>
 </html>
-
