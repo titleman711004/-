@@ -3,85 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>考古辨識測試-最終修正版</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <title>鏡頭測試</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; padding: 20px; }
-        #webcam-container { margin: 15px auto; width: 300px; height: 300px; border: 3px solid #555; background: #333; border-radius: 10px; overflow: hidden; position: relative; }
-        /* 確保畫布填滿容器 */
-        canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
-        .btn { background: #ffcc00; color: #000; border: none; padding: 15px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        #result { font-size: 1.5rem; color: #ffeb3b; margin-top: 15px; min-height: 1.6rem; }
-        #debug-log { text-align: left; background: #000; color: #0f0; padding: 10px; border-radius: 5px; margin-top: 20px; font-size: 0.7rem; display: block; white-space: pre-wrap; border: 1px solid #333; }
+        body { font-family: sans-serif; text-align: center; background: #000; color: white; margin: 0; padding: 20px; }
+        video { width: 100%; max-width: 400px; border: 2px solid #ffcc00; border-radius: 10px; background: #222; }
+        .btn { background: #ffcc00; color: #000; border: none; padding: 20px 40px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; margin-top: 20px; cursor: pointer; }
+        #status { margin-top: 15px; color: #aaa; }
     </style>
 </head>
 <body>
 
-    <h1>考古辨識相機測試</h1>
-    <div id="webcam-container"></div>
-    <div id="result">尚未啟動</div>
+    <h1>鏡頭測試</h1>
+    <p>如果成功，下方會出現即時畫面</p>
+    
+    <video id="video" autoplay playsinline muted></video>
+    
     <br>
-    <button class="btn" id="start-btn" onclick="init()">啟動鏡頭</button>
-    <div id="debug-log">系統日誌：等待操作...</div>
+    <button class="btn" onclick="startCamera()">啟動鏡頭</button>
+    <div id="status">等待點擊...</div>
 
-    <script type="text/javascript">
-        // 確保連結有效
-        const URL = "https://teachablemachine.withgoogle.com/models/v8L_B9_S/"; 
+    <script>
+        async function startCamera() {
+            const video = document.getElementById('video');
+            const status = document.getElementById('status');
+            status.innerHTML = "正在請求權限...";
 
-        let model, webcam, maxPredictions;
-
-        function log(msg) {
-            document.getElementById("debug-log").innerHTML += "\n> " + msg;
-        }
-
-        async function init() {
-            log("正在初始化...");
             try {
-                // 1. 載入模型
-                model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-                maxPredictions = model.getTotalClasses();
-                log("模型載入成功");
-
-                // 2. 設定鏡頭 (寬, 高, 是否翻轉)
-                webcam = new tmImage.Webcam(300, 300, false); 
+                // 請求後鏡頭
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, 
+                    audio: false 
+                });
                 
-                // 3. 嘗試啟動後鏡頭
-                log("正在請求鏡頭權限...");
-                await webcam.setup({ facingMode: "environment" }); 
-                
-                // 4. 【關鍵修正】強制設定 Video 標籤屬性
-                const video = webcam.webcam; // 獲取原始 HTMLVideoElement
-                video.setAttribute('playsinline', 'true');
-                video.setAttribute('muted', 'true');
-                video.style.width = "300px";
-                video.style.height = "300px";
-
-                await webcam.play();
-                log("鏡頭串流開始播放");
-                
-                document.getElementById("start-btn").style.display = "none";
-                document.getElementById("webcam-container").appendChild(webcam.canvas);
-                
-                window.requestAnimationFrame(loop);
-                document.getElementById("result").innerHTML = "掃描中...";
-            } catch (e) {
-                log("錯誤: " + e.name + " - " + e.message);
-                document.getElementById("result").innerHTML = "啟動失敗";
+                video.srcObject = stream;
+                status.innerHTML = "✅ 鏡頭已成功啟動！";
+                console.log("Camera started successfully");
+            } catch (err) {
+                console.error(err);
+                status.innerHTML = "❌ 失敗: " + err.name + "<br>" + err.message;
             }
-        }
-
-        async function loop() {
-            webcam.update(); // 這是將影像畫到畫布上的動作
-            await predict();
-            window.requestAnimationFrame(loop);
-        }
-
-        async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-            prediction.sort((a, b) => b.probability - a.probability);
-            document.getElementById("result").innerHTML = 
-                prediction[0].className + ": " + (prediction[0].probability * 100).toFixed(0) + "%";
         }
     </script>
 </body>
