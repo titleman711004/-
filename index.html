@@ -3,74 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台灣考古辨識系統</title>
+    <title>考古辨識測試版</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; padding: 20px; touch-action: manipulation; }
-        h1 { font-size: 1.2rem; color: #ffcc00; }
-        #webcam-container { margin: 15px auto; width: 300px; height: 300px; border-radius: 15px; overflow: hidden; border: 3px solid #555; background: #000; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; padding: 20px; }
+        #webcam-container { margin: 15px auto; width: 300px; height: 300px; border: 3px solid #555; background: #000; border-radius: 10px; overflow: hidden; }
         #webcam-container canvas { width: 100% !important; height: auto !important; }
-        #result-card { background: #333; border-radius: 12px; padding: 15px; margin: 10px auto; max-width: 320px; }
-        #label-container { font-size: 1.5rem; font-weight: bold; color: #ffeb3b; }
-        #detail-container { font-size: 0.9rem; color: #bbb; margin-top: 8px; }
-        .start-btn { background: #ffcc00; color: #000; border: none; padding: 15px 30px; font-size: 1.1rem; font-weight: bold; border-radius: 30px; margin-top: 20px; cursor: pointer; width: 80%; }
-        .error-msg { color: #ff5252; font-size: 0.8rem; margin-top: 10px; text-align: left; background: #421; padding: 10px; border-radius: 5px; display: none; }
+        .btn { background: #ffcc00; color: #000; border: none; padding: 15px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; }
+        #result { font-size: 1.5rem; color: #ffeb3b; margin-top: 15px; font-weight: bold; }
+        #debug-log { text-align: left; background: #333; color: #ff5252; padding: 10px; border-radius: 5px; margin-top: 20px; font-size: 0.8rem; display: none; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
-    <h1>考古文化辨識測試版</h1>
+    <h1>考古辨識測試</h1>
+    <p>請確認網址為 https 開頭</p>
     
     <div id="webcam-container"></div>
-
-    <div id="result-card">
-        <div id="label-container">準備就緒</div>
-        <div id="detail-container">請點擊下方按鈕啟動鏡頭</div>
-    </div>
-
-    <button type="button" class="start-btn" id="start-btn" onclick="init()">點此開啟鏡頭</button>
+    <div id="result">等待啟動...</div>
     
-    <div id="error-log" class="error-msg"></div>
+    <br>
+    <button class="btn" id="start-btn" onclick="init()">啟動鏡頭辨識</button>
+
+    <div id="debug-log"></div>
 
     <script type="text/javascript">
-        // 使用我提供的測試模型連結
+        // 這是測試用模型 URL (辨識陶片、石塊、背景)
         const URL = "https://teachablemachine.withgoogle.com/models/p_C0hO9Gf/"; 
 
-        let model, webcam, labelContainer, detailContainer, maxPredictions;
+        let model, webcam, maxPredictions;
 
         async function init() {
+            const log = document.getElementById("debug-log");
             const btn = document.getElementById("start-btn");
-            const errorLog = document.getElementById("error-log");
+            const res = document.getElementById("result");
+            
+            log.style.display = "none";
             btn.innerHTML = "載入中...";
-            btn.disabled = true;
 
             try {
                 const modelURL = URL + "model.json";
                 const metadataURL = URL + "metadata.json";
 
+                // 1. 載入模型
                 model = await tmImage.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
 
-                // 手機相機設定
-                const flip = false; 
-                webcam = new tmImage.Webcam(300, 300, flip); 
+                // 2. 鏡頭設定
+                webcam = new tmImage.Webcam(300, 300, false); 
                 
-                // 這裡最容易噴錯，我們捕捉它
+                // 嘗試啟動後鏡頭
                 await webcam.setup({ facingMode: "environment" }); 
                 await webcam.play();
+                
+                btn.style.display = "none";
+                res.innerHTML = "正在辨識中...";
                 
                 window.requestAnimationFrame(loop);
                 document.getElementById("webcam-container").appendChild(webcam.canvas);
                 
-                btn.style.display = "none";
-                document.getElementById("label-container").innerHTML = "掃描中...";
             } catch (e) {
                 console.error(e);
-                btn.innerHTML = "重試";
-                btn.disabled = false;
-                errorLog.style.display = "block";
-                errorLog.innerHTML = "<b>錯誤診斷：</b><br>名稱: " + e.name + "<br>訊息: " + e.message + "<br><br>請確認是否使用 Safari/Chrome 並允許相機權限。";
+                btn.innerHTML = "啟動鏡頭辨識";
+                log.style.display = "block";
+                log.innerHTML = "❌ 錯誤診斷：\n" + e.name + ": " + e.message;
+                res.innerHTML = "啟動失敗";
             }
         }
 
@@ -85,9 +83,9 @@
             prediction.sort((a, b) => b.probability - a.probability);
             
             const top = prediction[0];
-            if (top.probability > 0.6) {
-                document.getElementById("label-container").innerHTML = top.className;
-                document.getElementById("detail-container").innerHTML = "辨識信心度: " + (top.probability * 100).toFixed(0) + "%";
+            if (top.probability > 0.5) {
+                document.getElementById("result").innerHTML = 
+                    top.className + " (" + (top.probability * 100).toFixed(0) + "%)";
             }
         }
     </script>
