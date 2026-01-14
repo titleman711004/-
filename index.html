@@ -1,44 +1,73 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-    <title>考古遺址初步篩選器</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣考古陶片辨識系統</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
-        #webcam-container { margin-top: 20px; border: 5px solid #555; display: inline-block; }
-        #label-container { font-size: 24px; margin-top: 20px; font-weight: bold; }
-        .match { color: #ffeb3b; font-size: 32px; } /* 偵測到時變黃色加強顯示 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+               text-align: center; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+        h1 { font-size: 1.5rem; color: #ffcc00; }
+        #webcam-container { margin-top: 15px; border-radius: 15px; overflow: hidden; 
+                           border: 4px solid #444; display: inline-block; line-height: 0; }
+        #result-card { background: #333; border-radius: 15px; padding: 20px; 
+                      margin: 20px auto; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #label-container { font-size: 1.4rem; font-weight: bold; color: #fff; margin-bottom: 10px; }
+        #detail-container { font-size: 1rem; color: #bbb; line-height: 1.5; }
+        button { background: #ffcc00; color: #000; border: none; padding: 12px 25px; 
+                 font-size: 1.1rem; font-weight: bold; border-radius: 50px; cursor: pointer; }
+        button:active { background: #e6b800; }
+        .loading { color: #888; font-style: italic; }
     </style>
 </head>
 <body>
-    <h2>大坌坑文化繩紋辨識</h2>
-    <button type="button" onclick="init()">啟動鏡頭</button>
+
+    <h1>台灣考古文化 AI 辨識</h1>
+    <p>請對準陶片紋飾，建議使用側光照射</p>
+    
+    <button type="button" id="start-btn" onclick="init()">開啟辨識鏡頭</button>
+
     <div id="webcam-container"></div>
-    <div id="label-container">等待啟動...</div>
+
+    <div id="result-card">
+        <div id="label-container">等待啟動...</div>
+        <div id="detail-container">請點擊上方按鈕並允許相機權限</div>
+    </div>
 
     <script type="text/javascript">
-        // 這裡替換成你在 Teachable Machine 產生的連結
-        const URL = "你的模型連結/"; 
+        // ！！！請將此處換成你在 Teachable Machine 訓練後生成的連結 ！！！
+        const URL = "https://teachablemachine.withgoogle.com/models/你的模型編號/"; 
 
-        let model, webcam, labelContainer, maxPredictions;
+        let model, webcam, labelContainer, detailContainer, maxPredictions;
 
         async function init() {
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-
-            model = await tmImage.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-
-            // 設定鏡頭（支援手機後鏡頭）
-            const flip = false; 
-            webcam = new tmImage.Webcam(300, 300, flip); 
-            await webcam.setup({ facingMode: "environment" }); 
-            await webcam.play();
-            window.requestAnimationFrame(loop);
-
-            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            document.getElementById("start-btn").style.display = "none";
             labelContainer = document.getElementById("label-container");
+            detailContainer = document.getElementById("detail-container");
+            labelContainer.innerHTML = "<span class='loading'>載入 AI 模型中...</span>";
+
+            try {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                // 手機端關鍵設定：facingMode: "environment" (後鏡頭)
+                const flip = false; 
+                webcam = new tmImage.Webcam(350, 350, flip); 
+                await webcam.setup({ facingMode: "environment" }); 
+                await webcam.play();
+                
+                window.requestAnimationFrame(loop);
+                document.getElementById("webcam-container").appendChild(webcam.canvas);
+            } catch (e) {
+                console.error(e);
+                labelContainer.innerHTML = "啟動失敗";
+                detailContainer.innerHTML = "請確保使用 HTTPS 連線並在 Safari/Chrome 允許相機權限。";
+            }
         }
 
         async function loop() {
@@ -50,21 +79,31 @@
         async function predict() {
             const prediction = await model.predict(webcam.canvas);
             
-            // 找出機率最高的類別
-            let bestMatch = "";
-            let highestProb = 0;
-            for (let i = 0; i < maxPredictions; i++) {
-                if (prediction[i].probability > highestProb) {
-                    highestProb = prediction[i].probability;
-                    bestMatch = prediction[i].className;
-                }
-            }
+            // 排序取得機率最高者
+            prediction.sort((a, b) => b.probability - a.probability);
+            const top = prediction[0];
 
-            // 如果機率超過 80% 就顯示結果
-            if (highestProb > 0.8) {
-                labelContainer.innerHTML = `<div class="match">偵測到：${bestMatch}</div>`;
+            if (top.probability > 0.65) {
+                const name = top.className;
+                labelContainer.innerHTML = `發現：${name}`;
+                
+                // 根據類別自動顯示描述邏輯
+                let info = "";
+                if(name.includes("大坌坑")) {
+                    info = "💡 關鍵特徵：粗繩紋、質地粗糙。可能是台灣最早的新石器文化。";
+                } else if(name.includes("十三行")) {
+                    info = "💡 關鍵特徵：幾何拍印紋（方格紋）、紅褐陶。屬於金屬器時代。";
+                } else if(name.includes("圓山")) {
+                    info = "💡 關鍵特徵：素面無紋、堅硬、帶有把手。常見於北部貝塚。";
+                } else if(name.includes("卑南")) {
+                    info = "💡 關鍵特徵：橙紅夾砂陶、雙把罐。東部新石器時代代表。";
+                } else {
+                    info = `辨識信心度：${(top.probability * 100).toFixed(1)}%`;
+                }
+                detailContainer.innerHTML = info;
             } else {
-                labelContainer.innerHTML = "比對中...";
+                labelContainer.innerHTML = "掃描中...";
+                detailContainer.innerHTML = "請移動鏡頭或調整光線，對準陶片特徵。";
             }
         }
     </script>
